@@ -17,15 +17,23 @@ import ninja.leaping.configurate.commented.CommentedConfigurationNode
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.core.LoggerContext
+import org.json.JSONObject
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.stream.Collectors
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     Dis4IRC(args)
 }
 val logger: Logger = LoggerFactory.getLogger("init") ?: throw IllegalStateException("Unable to init logger!")
+val SAVED_DATA_PATH: Path = Paths.get("./bridge-data.dat")
 
 class Dis4IRC(args: Array<String>) {
     private var configPath: String = "config.hocon"
@@ -50,7 +58,8 @@ class Dis4IRC(args: Array<String>) {
         val logLevel = config.getNode("log-level")
         if (logLevel.isVirtual) {
             logLevel.setComment("Sets the minimum amount of detail sent to the log. Acceptable values are: " +
-                    "ERROR, WARN, INFO, DEBUG, TRACE") // I see no reason to mention OFF, FATAL, or ALL explicitly
+                        "ERROR, WARN, INFO, DEBUG, TRACE"
+            ) // I see no reason to mention OFF, FATAL, or ALL explicitly
             logLevel.value = "INFO"
         }
 
@@ -88,11 +97,20 @@ class Dis4IRC(args: Array<String>) {
             logger.error("No bridge configurations found!")
         }
 
+        kotlin.runCatching { loadBridgeData(SAVED_DATA_PATH) }.onFailure {
+            logger.error("Unable to load bridge data: $it")
+            it.printStackTrace()
+        }
+
         // re-save config now that bridges have init'd to hopefully update the file with any defaults
         //config.saveConfig() // Can throw NFE as a result of a HOCON lib issue, see https://github.com/zachbr/Dis4IRC/issues/19
 
         Runtime.getRuntime().addShutdownHook(Thread {
             shuttingDown = true
+            kotlin.runCatching { saveBridgeData(SAVED_DATA_PATH) }.onFailure {
+                logger.error("Unable to save bridge data: $it")
+                it.printStackTrace()
+            }
             ArrayList(bridgesByName.values).forEach { it.shutdown() }
         })
     }
@@ -166,6 +184,39 @@ class Dis4IRC(args: Array<String>) {
 
         println("Source available at ${Versioning.sourceRepo}")
         println("Available under the MIT License")
+    }
+
+    private fun loadBridgeData(path: Path) {
+        if (Files.notExists(path)) return
+
+        logger.debug("Loading bridge data from $path")
+        val json: JSONObject = FileInputStream(path.toFile()).use {
+            val compressedIn = GZIPInputStream(it)
+            val textIn = InputStreamReader(compressedIn)
+            return@use JSONObject(textIn.readText())
+        }
+
+        bridgesByName.forEach { entry ->
+            if (json.has(entry.key)) {
+                entry.value.readSavedData(json.getJSONObject((entry.key)))
+            }
+        }
+    }
+
+    private fun saveBridgeData(path: Path) {
+        logger.debug("Saving bridge data to $path")
+        val json = JSONObject()
+
+        // TODO: Do not lose statistics and data from bridges in error
+        bridgesByName.forEach { entry -> json.put(entry.key, entry.value.persistData(JSONObject())) }
+        FileOutputStream(path.toFile(), false).use {
+            val compressedOut = GZIPOutputStream(it)
+            val textOut = OutputStreamWriter(compressedOut, "UTF-8")
+            textOut.write(json.toString())
+            // seeing some oddities with IJ's run config, these are probably not needed
+            textOut.flush()
+            compressedOut.close()
+        }
     }
 }
 

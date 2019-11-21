@@ -11,6 +11,7 @@ package io.zachbr.dis4irc.bridge
 import com.google.common.collect.EvictingQueue
 import io.zachbr.dis4irc.bridge.message.Message
 import io.zachbr.dis4irc.bridge.message.PlatformType
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
@@ -60,5 +61,17 @@ class StatisticsManager(private val bridge: Bridge) {
      */
     fun getMessageTimings(): LongArray {
         return messageTimings.toLongArray()
+    }
+
+    fun writeData(json: JSONObject): JSONObject {
+        // TODO: writing raw longs and reading them back like this will probably not age well for really old files
+        json.put("irc", totalFromIrc)
+        json.put("discord", totalFromDiscord)
+        return json
+    }
+
+    fun readSavedData(json: JSONObject) {
+        totalFromIrc += json.getLong("irc")
+        totalFromDiscord += json.getLong("discord")
     }
 }
