@@ -12,6 +12,8 @@ import com.google.common.collect.EvictingQueue
 import io.zachbr.dis4irc.bridge.message.Message
 import io.zachbr.dis4irc.bridge.message.PlatformType
 import org.json.JSONObject
+import java.lang.NumberFormatException
+import java.math.BigInteger
 import java.util.concurrent.TimeUnit
 
 /**
@@ -19,8 +21,8 @@ import java.util.concurrent.TimeUnit
  */
 class StatisticsManager(private val bridge: Bridge) {
     private val messageTimings = EvictingQueue.create<Long>(1000)
-    private var totalFromIrc: Long = 0
-    private var totalFromDiscord: Long = 0
+    private var totalFromIrc = BigInteger.valueOf(0)
+    private var totalFromDiscord = BigInteger.valueOf(0)
 
     /**
      * Processes a message, adding it to whatever statistic counters it needs
@@ -45,14 +47,14 @@ class StatisticsManager(private val bridge: Bridge) {
     /**
      * Gets the total count of messages sent from IRC since the bridge was started
      */
-    fun getTotalFromIrc(): Long {
+    fun getTotalFromIrc(): BigInteger {
         return totalFromIrc
     }
 
     /**
      * Gets the total count of messages sent from Discord since the bridge was started
      */
-    fun getTotalFromDiscord(): Long {
+    fun getTotalFromDiscord(): BigInteger {
         return totalFromDiscord
     }
 
@@ -64,14 +66,28 @@ class StatisticsManager(private val bridge: Bridge) {
     }
 
     fun writeData(json: JSONObject): JSONObject {
-        // TODO: writing raw longs and reading them back like this will probably not age well for really old files
-        json.put("irc", totalFromIrc)
-        json.put("discord", totalFromDiscord)
+        json.put("irc", totalFromIrc.toString())
+        json.put("discord", totalFromDiscord.toString())
         return json
     }
 
     fun readSavedData(json: JSONObject) {
-        totalFromIrc += json.getLong("irc")
-        totalFromDiscord += json.getLong("discord")
+        val ircLoaded: BigInteger = safeInitBigInt(json.getString("irc"), "IRC count") ?: BigInteger.ZERO
+        val discordLoaded: BigInteger = safeInitBigInt(json.getString("discord"), "Discord count") ?: BigInteger.ZERO
+        totalFromIrc += ircLoaded
+        totalFromDiscord += discordLoaded
+    }
+
+    /**
+     * Safely attempts to load a serialized BigInteger value. Returns null so the caller may handle
+     * an illegal value as they see fit.
+     */
+    private fun safeInitBigInt(strValue: String, valueType: String): BigInteger? {
+        return try {
+            BigInteger(strValue)
+        } catch (ex: NumberFormatException) {
+            bridge.logger.error("Unable to load $valueType from saved data")
+            null
+        }
     }
 }

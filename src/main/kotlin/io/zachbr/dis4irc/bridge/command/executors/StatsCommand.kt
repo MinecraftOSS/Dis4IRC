@@ -12,8 +12,8 @@ import io.zachbr.dis4irc.bridge.Bridge
 import io.zachbr.dis4irc.bridge.command.api.Executor
 import io.zachbr.dis4irc.bridge.message.Message
 import java.lang.management.ManagementFactory
+import java.math.BigInteger
 import java.util.concurrent.TimeUnit
-import kotlin.math.roundToInt
 
 private const val EXEC_DELAY_MILLIS = 60_000
 
@@ -55,12 +55,13 @@ class StatsCommand(private val bridge: Bridge) : Executor {
                 "Messages from Discord: $fromDiscord ($fromDiscordPercent%)"
     }
 
-    private fun percent(value: Long, total: Long): Int {
-        if (total == 0L || value == total) {
+    private fun percent(value: BigInteger, total: BigInteger): Int {
+        if (total == BigInteger.ZERO || value == total) {
             return 100
         }
 
-        return ((value * 100.0) / total).roundToInt()
+        val raw = ((value * BigInteger.valueOf(100)) / total)
+        return raw.toInt()
     }
 
     /**
