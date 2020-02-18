@@ -111,7 +111,6 @@ class StatsCommand(private val bridge: Bridge) : Executor {
 
         val elapsedSeconds = left / secondsInMilli
 
-        return String.format("%d days, %d hours, %d minutes, %d seconds",
-            elapsedDays, elapsedHours, elapsedMinutes, elapsedSeconds)
+        return "$elapsedDays days, $elapsedHours hours, $elapsedMinutes minutes, $elapsedSeconds seconds"
     }
 }
