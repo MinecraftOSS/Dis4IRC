@@ -10,6 +10,7 @@ package io.zachbr.dis4irc.bridge.command
 
 import io.zachbr.dis4irc.bridge.Bridge
 import io.zachbr.dis4irc.bridge.command.api.Executor
+import io.zachbr.dis4irc.bridge.command.executors.PinnedMessagesCommand
 import io.zachbr.dis4irc.bridge.command.executors.StatsCommand
 import io.zachbr.dis4irc.bridge.message.BOT_SENDER
 import io.zachbr.dis4irc.bridge.message.Destination
@@ -27,6 +28,7 @@ class CommandManager(private val bridge: Bridge, config: CommentedConfigurationN
 
     init {
         registerExecutor("stats", StatsCommand(bridge))
+        registerExecutor("pinned", PinnedMessagesCommand(bridge))
     }
 
     /**

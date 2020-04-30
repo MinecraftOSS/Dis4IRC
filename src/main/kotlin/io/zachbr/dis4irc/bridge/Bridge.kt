@@ -26,13 +26,13 @@ import java.lang.Exception
 class Bridge(private val main: Dis4IRC, internal val config: BridgeConfiguration) {
     internal val logger = LoggerFactory.getLogger(config.bridgeName) ?: throw IllegalStateException("Could not init logger")
 
-    private val channelMappings = ChannelMappingManager(config)
+    internal val channelMappings = ChannelMappingManager(config)
     private val commandManager = CommandManager(this, config.rawNode.getNode("commands"))
     private val mutatorManager = MutatorManager(this, config.rawNode.getNode("mutators"))
     internal val statsManager = StatisticsManager(this)
 
-    private val discordConn: Pier
-    private val ircConn: Pier
+    internal val discordConn: DiscordPier
+    internal val ircConn: IrcPier
 
     init {
         discordConn = DiscordPier(this)
