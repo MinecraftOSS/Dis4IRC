@@ -12,12 +12,16 @@ import io.zachbr.dis4irc.bridge.Bridge
 import io.zachbr.dis4irc.bridge.command.api.Executor
 import io.zachbr.dis4irc.bridge.message.Message
 import java.lang.management.ManagementFactory
+import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.MathContext
+import java.math.RoundingMode
 import java.util.concurrent.TimeUnit
 
 private const val EXEC_DELAY_MILLIS = 60_000
 
 class StatsCommand(private val bridge: Bridge) : Executor {
+    private val percentageContext = MathContext(4, RoundingMode.HALF_UP)
     private var lastExecution = 0L
 
     private fun isRateLimited(): Boolean {
@@ -47,21 +51,22 @@ class StatsCommand(private val bridge: Bridge) : Executor {
         val fromDiscord = bridge.statsManager.getTotalFromDiscord()
 
         val fromIrcPercent = percent(fromIrc, fromDiscord + fromIrc)
-        val fromDiscordPercent = 100 - fromIrcPercent
+        val fromDiscordPercent = BigDecimal.valueOf(100).subtract(fromIrcPercent, percentageContext)
 
         return "Uptime: $uptimeStr\n" +
                 "Message Handling: ${meanMillis}ms / ${medianMillis}ms (mean/median)\n" +
-                "Messages from IRC: $fromIrc ($fromIrcPercent%)\n" +
-                "Messages from Discord: $fromDiscord ($fromDiscordPercent%)"
+                "Messages from IRC: $fromIrc (${fromIrcPercent.toDouble()}%)\n" +
+                "Messages from Discord: $fromDiscord (${fromDiscordPercent.toDouble()}%)"
     }
 
-    private fun percent(value: BigInteger, total: BigInteger): Int {
+    private fun percent(value: BigInteger, total: BigInteger): BigDecimal {
         if (total == BigInteger.ZERO || value == total) {
-            return 100
+            return BigDecimal.valueOf(100)
         }
 
-        val raw = ((value * BigInteger.valueOf(100)) / total)
-        return raw.toInt()
+        return BigDecimal(value)
+            .multiply(BigDecimal.valueOf(100))
+            .divide(BigDecimal(total), percentageContext)
     }
 
     /**
