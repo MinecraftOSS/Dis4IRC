@@ -24,9 +24,12 @@ import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 import java.util.stream.Collectors
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -38,7 +41,7 @@ val SAVED_DATA_PATH: Path = Paths.get("./bridge-data.dat")
 class Dis4IRC(args: Array<String>) {
     private var configPath: String = "config.hocon"
     private val bridgesByName = HashMap<String, Bridge>()
-    private val bridgesInErr = ArrayList<String>()
+    private val bridgesInErr = HashMap<String, Bridge>()
     private var shuttingDown = false
 
     init {
@@ -138,16 +141,21 @@ class Dis4IRC(args: Array<String>) {
         bridgesByName.remove(name) ?: throw IllegalArgumentException("Unknown bridge: $name has shutdown, why wasn't it tracked?")
 
         if (inErr) {
-            bridgesInErr.add(bridge.config.bridgeName)
+            bridgesInErr[name] = bridge
         }
 
         if (!shuttingDown && bridgesByName.size == 0) {
             logger.info("No bridges running - Exiting")
 
+            kotlin.runCatching { saveBridgeData(SAVED_DATA_PATH) }.onFailure {
+                logger.error("Unable to save bridge data: $it")
+                it.printStackTrace()
+            }
+
             val anyErr = bridgesInErr.isNotEmpty()
             val exitCode = if (anyErr) 1 else 0
             if (anyErr) {
-                val errBridges: String = bridgesInErr.stream().collect(Collectors.joining(", "))
+                val errBridges: String = bridgesInErr.keys.joinToString(", ")
                 logger.warn("The following bridges exited in error: $errBridges")
             }
 
@@ -207,8 +215,15 @@ class Dis4IRC(args: Array<String>) {
         logger.debug("Saving bridge data to $path")
         val json = JSONObject()
 
-        // TODO: Do not lose statistics and data from bridges in error
-        bridgesByName.forEach { entry -> json.put(entry.key, entry.value.persistData(JSONObject())) }
+        val bridges = TreeSet<Bridge>(Comparator<Bridge> { b1: Bridge, b2: Bridge -> // maintain consistent order
+            return@Comparator b1.config.bridgeName.compareTo(b2.config.bridgeName)
+        })
+        bridges.addAll(bridgesByName.values)
+        bridges.addAll(bridgesInErr.values)
+        for (bridge in bridges) {
+            json.put(bridge.config.bridgeName, bridge.persistData(JSONObject()))
+        }
+
         FileOutputStream(path.toFile(), false).use {
             val compressedOut = GZIPOutputStream(it)
             val textOut = OutputStreamWriter(compressedOut, "UTF-8")
