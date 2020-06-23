@@ -102,9 +102,8 @@ class Bridge(private val main: Dis4IRC, internal val config: BridgeConfiguration
     }
 
     internal fun readSavedData(json: JSONObject) {
-        val statsJson = json.getJSONObject("statistics")
-        if (statsJson != null) {
-            statsManager.readSavedData(statsJson)
+        if (json.has("statistics")) {
+            statsManager.readSavedData(json.getJSONObject("statistics"))
         }
     }
 
