@@ -66,28 +66,15 @@ class StatisticsManager(private val bridge: Bridge) {
     }
 
     fun writeData(json: JSONObject): JSONObject {
-        json.put("irc", totalFromIrc.toString())
-        json.put("discord", totalFromDiscord.toString())
+        json.put("irc", totalFromIrc)
+        json.put("discord", totalFromDiscord)
         return json
     }
 
     fun readSavedData(json: JSONObject) {
-        val ircLoaded: BigInteger = safeInitBigInt(json.getString("irc"), "IRC count") ?: BigInteger.ZERO
-        val discordLoaded: BigInteger = safeInitBigInt(json.getString("discord"), "Discord count") ?: BigInteger.ZERO
+        val ircLoaded: BigInteger = json.optBigInteger("irc", BigInteger.ZERO)
+        val discordLoaded: BigInteger = json.optBigInteger("discord", BigInteger.ZERO)
         totalFromIrc += ircLoaded
         totalFromDiscord += discordLoaded
-    }
-
-    /**
-     * Safely attempts to load a serialized BigInteger value. Returns null so the caller may handle
-     * an illegal value as they see fit.
-     */
-    private fun safeInitBigInt(strValue: String, valueType: String): BigInteger? {
-        return try {
-            BigInteger(strValue)
-        } catch (ex: NumberFormatException) {
-            bridge.logger.error("Unable to load $valueType from saved data")
-            null
-        }
     }
 }
