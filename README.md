@@ -88,6 +88,6 @@ Let's just not go there :p
 Built using
 -----------
 * [KittehIRCClientLib](https://github.com/KittehOrg/KittehIRCClientLib)
-* [JDA (Java Discord API)](https://github.com/DV8FromTheWorld/JDA)
+* [JavaCord (Java Discord API)](https://github.com/Javacord/Javacord/)
 * [Configurate](https://github.com/SpongePowered/configurate)
 

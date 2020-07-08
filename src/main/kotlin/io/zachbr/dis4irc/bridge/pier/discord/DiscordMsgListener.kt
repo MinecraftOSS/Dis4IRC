@@ -8,31 +8,29 @@
 
 package io.zachbr.dis4irc.bridge.pier.discord
 
-import io.zachbr.dis4irc.bridge.message.Message
-import io.zachbr.dis4irc.bridge.message.Sender
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
-import net.dv8tion.jda.api.hooks.ListenerAdapter
+import org.javacord.api.event.message.MessageCreateEvent
+import org.javacord.api.listener.message.MessageCreateListener
 
 /**
  * Responsible for listening to incoming discord messages and filtering garbage
  */
-class DiscordMsgListener(private val pier: DiscordPier) : ListenerAdapter() {
+class DiscordMsgListener(private val pier: DiscordPier) : MessageCreateListener {
     private val logger = pier.logger
 
-    override fun onGuildMessageReceived(event: GuildMessageReceivedEvent) {
+    override fun onMessageCreate(event: MessageCreateEvent) {
         // dont bridge itself
         val source = event.channel.asBridgeSource()
-        if (pier.isThisBot(source, event.author.idLong)) {
+        if (pier.isThisBot(source, event.messageAuthor.id)) {
             return
         }
 
         // don't bridge empty messages (discord does this on join)
-        if (event.message.contentDisplay.isEmpty() && event.message.attachments.isEmpty()) {
+        if (event.message.readableContent.isEmpty() && event.message.attachments.isEmpty()) {
             return
         }
 
         val receiveTimestamp = System.nanoTime()
-        logger.debug("DISCORD MSG ${event.channel.name} ${event.author.name}: ${event.message.contentStripped}")
+        logger.debug("DISCORD MSG ${event.channel.asServerChannel().get().name} ${event.messageAuthor.displayName}: ${event.message.readableContent}")
 
         val message = event.message.toBridgeMsg(logger, receiveTimestamp)
         pier.sendToBridge(message)

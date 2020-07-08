@@ -8,23 +8,22 @@
 
 package io.zachbr.dis4irc.bridge.pier.discord
 
-import io.zachbr.dis4irc.bridge.message.BOT_SENDER
-import io.zachbr.dis4irc.bridge.message.Message
-import io.zachbr.dis4irc.bridge.message.PlatformType
-import io.zachbr.dis4irc.bridge.message.sourceFromUnknown
-import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent
-import net.dv8tion.jda.api.events.guild.member.GuildMemberLeaveEvent
-import net.dv8tion.jda.api.hooks.ListenerAdapter
+import io.zachbr.dis4irc.bridge.message.*
+import org.javacord.api.event.server.member.ServerMemberJoinEvent
+import org.javacord.api.event.server.member.ServerMemberLeaveEvent
+import org.javacord.api.listener.server.member.ServerMemberJoinListener
+import org.javacord.api.listener.server.member.ServerMemberLeaveListener
 
-class DiscordJoinQuitListener(private val pier: DiscordPier) : ListenerAdapter() {
+class DiscordJoinQuitListener(private val pier: DiscordPier) : ServerMemberJoinListener, ServerMemberLeaveListener {
+
     private val logger = pier.logger
 
-    override fun onGuildMemberJoin(event: GuildMemberJoinEvent) {
-        val channel = event.guild.systemChannel
-        val source = channel?.asBridgeSource() ?: sourceFromUnknown(PlatformType.DISCORD)
+    override fun onServerMemberJoin(event: ServerMemberJoinEvent) {
+        val channel = event.server.systemChannel.get()
+        val source = Source(channel.name, channel.id, PlatformType.DISCORD) ?: sourceFromUnknown(PlatformType.DISCORD)
 
         // don't bridge itself
-        if (pier.isThisBot(source, event.user.idLong)) {
+        if (pier.isThisBot(source, event.user.id)) {
             return
         }
 
@@ -36,12 +35,12 @@ class DiscordJoinQuitListener(private val pier: DiscordPier) : ListenerAdapter()
         pier.sendToBridge(message)
     }
 
-    override fun onGuildMemberLeave(event: GuildMemberLeaveEvent) {
-        val channel = event.guild.systemChannel
-        val source = channel?.asBridgeSource() ?: sourceFromUnknown(PlatformType.DISCORD)
+    override fun onServerMemberLeave(event: ServerMemberLeaveEvent) {
+        val channel = event.server.systemChannel.get()
+        val source = Source(channel.name, channel.id, PlatformType.DISCORD) ?: sourceFromUnknown(PlatformType.DISCORD)
 
         // don't bridge itself
-        if (pier.isThisBot(source, event.user.idLong)) {
+        if (pier.isThisBot(source, event.user.id)) {
             return
         }
 

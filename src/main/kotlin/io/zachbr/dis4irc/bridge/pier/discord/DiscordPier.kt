@@ -18,15 +18,12 @@ import io.zachbr.dis4irc.bridge.message.Message
 import io.zachbr.dis4irc.bridge.message.Source
 import io.zachbr.dis4irc.bridge.pier.Pier
 import io.zachbr.dis4irc.util.replaceTarget
-import net.dv8tion.jda.api.JDA
-import net.dv8tion.jda.api.JDABuilder
-import net.dv8tion.jda.api.entities.Activity
-import net.dv8tion.jda.api.entities.Guild
-import net.dv8tion.jda.api.entities.TextChannel
+import org.javacord.api.DiscordApi
+import org.javacord.api.DiscordApiBuilder
+import org.javacord.api.entity.channel.TextChannel
+import org.javacord.api.entity.server.Server
 import org.slf4j.Logger
-import java.lang.StringBuilder
 import java.util.*
-import kotlin.collections.ArrayList
 
 private const val ZERO_WIDTH_SPACE = 0x200B.toChar()
 
@@ -34,23 +31,19 @@ class DiscordPier(private val bridge: Bridge) : Pier {
     internal val logger: Logger = bridge.logger
     private val webhookMap = HashMap<String, WebhookClient>()
     private var botAvatarUrl: String? = null
-    private lateinit var discordApi: JDA
+    private lateinit var discordApi: DiscordApi
 
     override fun start() {
         logger.info("Connecting to Discord API...")
 
-        val discordApiBuilder = JDABuilder()
-            .setToken(bridge.config.discord.apiKey)
-            .setActivity(Activity.of(Activity.ActivityType.DEFAULT, "IRC"))
-            .addEventListeners(DiscordMsgListener(this))
-
+        val discordApiBuilder = DiscordApiBuilder().setToken(bridge.config.discord.apiKey).login().join()
+        discordApiBuilder.updateActivity("IRC")
         if (bridge.config.announceJoinsQuits) {
-            discordApiBuilder.addEventListeners(DiscordJoinQuitListener(this))
+            discordApiBuilder.addListener(DiscordJoinQuitListener(this))
         }
+        discordApiBuilder.addListener(DiscordMsgListener(this))
 
         discordApi = discordApiBuilder
-            .build()
-            .awaitReady()
 
         // init webhooks
         if (bridge.config.discord.webHooks.isNotEmpty()) {
@@ -71,14 +64,14 @@ class DiscordPier(private val bridge: Bridge) : Pier {
             }
         }
 
-        botAvatarUrl = discordApi.selfUser.avatarUrl
+        botAvatarUrl = discordApi.yourself.avatar.url.toString()
 
-        logger.info("Discord Bot Invite URL: ${discordApi.getInviteUrl()}")
+        logger.info("Discord Bot Invite URL: ${discordApi.createBotInvite()}")
         logger.info("Connected to Discord!")
     }
 
     override fun onShutdown() {
-        discordApi.shutdownNow()
+        discordApi.disconnect()
 
         for (client in webhookMap.values) {
             client.close()
@@ -98,18 +91,18 @@ class DiscordPier(private val bridge: Bridge) : Pier {
         }
 
         val webhook = webhookMap[targetChan]
-        val guild = channel.guild
+        val guild = channel.asServerChannel().get().server
 
         // convert name use to proper mentions
         for (member in guild.members) {
-            val mentionTrigger = "@${member.effectiveName}" // require @ prefix
-            msg.contents = replaceTarget(msg.contents, mentionTrigger, member.asMention)
+            val mentionTrigger = "@${member.getNickname(guild)}" // require @ prefix
+            msg.contents = replaceTarget(msg.contents, mentionTrigger, member.nicknameMentionTag)
         }
 
         // convert emotes to show properly
-        for (emote in guild.emotes) {
+        for (emote in guild.customEmojis) {
             val mentionTrigger = ":${emote.name}:"
-            msg.contents = replaceTarget(msg.contents, mentionTrigger, emote.asMention, requireSeparation = false)
+            msg.contents = replaceTarget(msg.contents, mentionTrigger, emote.mentionTag, requireSeparation = false)
         }
 
         // Discord won't broadcast messages that are just whitespace
@@ -128,29 +121,29 @@ class DiscordPier(private val bridge: Bridge) : Pier {
     }
 
     private fun sendMessageOldStyle(discordChannel: TextChannel, msg: Message) {
-        if (!discordChannel.canTalk()) {
-            logger.warn("Bridge cannot speak in ${discordChannel.name} to send message: $msg")
+        if (!discordChannel.canWrite(discordApi.yourself)) {
+            logger.warn("Bridge cannot speak in ${discordChannel.asServerTextChannel().get().name} to send message: $msg")
             return
         }
 
         val senderName = enforceSenderName(msg.sender.displayName)
         val prefix = if (msg.originatesFromBridgeItself()) "" else "<$senderName> "
 
-        discordChannel.sendMessage("$prefix${msg.contents}").queue()
+        discordChannel.sendMessage("$prefix${msg.contents}")
     }
 
-    private fun sendMessageWebhook(guild: Guild, webhook: WebhookClient, msg: Message) {
+    private fun sendMessageWebhook(guild: Server, webhook: WebhookClient, msg: Message) {
         // try and get avatar for matching user
         var avatarUrl: String? = null
-        val matchingUsers = guild.getMembersByEffectiveName(msg.sender.displayName, true)
+        val matchingUsers = guild.getMembersByName(msg.sender.displayName)
         if (matchingUsers.isNotEmpty()) {
-            avatarUrl = matchingUsers.first().user.avatarUrl
+            avatarUrl = matchingUsers.first().avatar.url.toString()
         }
 
         var senderName = enforceSenderName(msg.sender.displayName)
         // if sender is command, use bot's actual name and avatar if possible
         if (msg.sender == BOT_SENDER) {
-            senderName = guild.getMember(discordApi.selfUser)?.effectiveName ?: senderName
+            senderName = discordApi.yourself?.name ?: senderName
             avatarUrl = botAvatarUrl ?: avatarUrl
         }
 
@@ -169,7 +162,7 @@ class DiscordPier(private val bridge: Bridge) : Pier {
      */
     fun isThisBot(source: Source, snowflake: Long): Boolean {
         // check against bot user directly
-        if (snowflake == discordApi.selfUser.idLong) {
+        if (snowflake == discordApi.yourself.id) {
             return true
         }
 
@@ -195,7 +188,7 @@ class DiscordPier(private val bridge: Bridge) : Pier {
      */
     fun getPinnedMessages(channelId: String): List<Message>? {
         val channel = getTextChannelBy(channelId) ?: return null
-        val messages = channel.retrievePinnedMessages().complete()
+        val messages = channel.pins.get()
 
         return messages.map { it.toBridgeMsg(logger) }.toList()
     }
@@ -206,10 +199,10 @@ class DiscordPier(private val bridge: Bridge) : Pier {
     private fun getTextChannelBy(string: String): TextChannel? {
         val byId = discordApi.getTextChannelById(string)
         if (byId != null) {
-            return byId
+            return byId.get()
         }
 
-        val byName = discordApi.getTextChannelsByName(string, false)
+        val byName = discordApi.getTextChannelsByName(string)
         return if (byName.isNotEmpty()) byName.first() else null
     }
 }

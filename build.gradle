@@ -10,7 +10,6 @@ version '1.2.0-SNAPSHOT'
 
 repositories {
     maven { url 'https://dl.bintray.com/kotlin/kotlin-eap/' }
-    maven { url 'https://dl.bintray.com/dv8fromtheworld/maven/' }
     maven { url 'https://repo.spongepowered.org/maven' }
     mavenCentral()
     jcenter()
@@ -63,10 +62,8 @@ shadowJar {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation "org.kitteh.irc:client-lib:7.2.2"
-    implementation("net.dv8tion:JDA:4.1.1_101") {
-        exclude module: 'opus-java'
-    }
     implementation "club.minnced:discord-webhooks:0.3.1"
+    implementation 'org.javacord:javacord:3.0.6'
 
     implementation 'org.json:json:20180813'
     implementation "org.spongepowered:configurate-hocon:3.6.1"
