@@ -20,7 +20,7 @@ class DiscordJoinQuitListener(private val pier: DiscordPier) : ServerMemberJoinL
 
     override fun onServerMemberJoin(event: ServerMemberJoinEvent) {
         val channel = event.server.systemChannel.get()
-        val source = Source(channel.name, channel.id, PlatformType.DISCORD) ?: sourceFromUnknown(PlatformType.DISCORD)
+        val source = channel.asBridgeSource()
 
         // don't bridge itself
         if (pier.isThisBot(source, event.user.id)) {
@@ -37,7 +37,7 @@ class DiscordJoinQuitListener(private val pier: DiscordPier) : ServerMemberJoinL
 
     override fun onServerMemberLeave(event: ServerMemberLeaveEvent) {
         val channel = event.server.systemChannel.get()
-        val source = Source(channel.name, channel.id, PlatformType.DISCORD) ?: sourceFromUnknown(PlatformType.DISCORD)
+        val source = channel.asBridgeSource()
 
         // don't bridge itself
         if (pier.isThisBot(source, event.user.id)) {
